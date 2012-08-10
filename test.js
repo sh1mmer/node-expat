@@ -2,6 +2,7 @@ var expat = require('./lib/node-expat');
 var Buffer = require('buffer').Buffer;
 var vows = require('vows');
 var assert = require('assert');
+var fs = require('fs');
 
 function collapseTexts(evs) {
     var r = [];
@@ -185,7 +186,7 @@ vows.describe('node-expat').addBatch({
       var p = new expat.Parser("UTF-8");
 	    expectWithParserAndStep("<start><first /><second>text</second>", [['startElement', 'start', {}], ['startElement', 'first', {}],  ['endElement', 'first'],  ['startElement', 'second', {}], ['text', "text"], ['endElement', 'second']], p, 1000);
       p.reset();
-	    expectWithParserAndStep("<restart><third>moretext</third><fourth /></restart>", [['startElement', 'restart', {}], ['startElement', 'third', {}], ['text', "moretext"], ['endElement', 'third'], ['startElement', 'fourth', {}], ['endElement', 'fourth'], ['endElement', 'restart']], p, 1000);     
+	    expectWithParserAndStep("<restart><third>moretext</third><fourth /></restart>", [['startElement', 'restart', {}], ['startElement', 'third', {}], ['text', "moretext"], ['endElement', 'third'], ['startElement', 'fourth', {}], ['endElement', 'fourth'], ['endElement', 'restart']], p, 1000);
   },
   'with doc error': function() {
 	    var p = new expat.Parser("UTF-8");
@@ -258,8 +259,8 @@ vows.describe('node-expat').addBatch({
 	    var p = new expat.Parser("UTF-8");
 	    p.parse('');
 	    assert.ok(true, "Did not segfault");
-	}, 
- 	
+	},
+
 	'parsing twice the same document with the same parser instance should be fine': 'reset() not yet implemented'
 	/*function() {
 	   var p = new expat.Parser("UTF-8");
@@ -303,5 +304,40 @@ vows.describe('node-expat').addBatch({
 	    p.parse(" ");
 	    assert.equal(p.getCurrentByteIndex(), 2);
 	},
+    },
+    'Stream interface': {
+	'read file': {
+	    topic: function() {
+		var p = expat.createParser();
+		this.startTags = 0;
+		p.on('startElement', function(name) {
+		    this.startTags++;
+		}.bind(this));
+		this.endTags = 0;
+		p.on('endElement', function(name) {
+		    this.endTags++;
+		}.bind(this));
+		p.on('end', function() {
+		    this.ended = true;
+		}.bind(this));
+		p.on('close', function() {
+		    this.closed = true;
+		    this.callback();
+		}.bind(this));
+
+		var mystic = fs.createReadStream(__dirname + '/test-mystic-library.xml');
+		mystic.pipe(p);
+	    },
+	    'startElement and endElement events': function() {
+		assert.ok(this.startTags > 0, 'startElement events at all');
+		assert.ok(this.startTags == this.endTags, 'equal amount');
+	    },
+	    'end event': function() {
+		assert.ok(this.ended, 'emit end event');
+	    },
+	    'close event': function() {
+		assert.ok(this.closed, 'emit close event');
+	    }
+	}
     }
 }).export(module);
